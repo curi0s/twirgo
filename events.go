@@ -1,13 +1,23 @@
-package bot
+package twirgo
 
-import "time"
+import (
+	"time"
+)
 
 type (
-	EventConnected struct{}
-	EventPinged    struct{}
+	EventConnected     struct{}
+	EventPinged        struct{}
+	EventJoinedChannel struct{}
+	EventPartedChannel struct{}
 
-	EventUserJoined      struct{}
-	EventUserParted      struct{}
+	EventUserJoined struct {
+		Channel *Channel
+		User    *User
+	}
+	EventUserParted struct {
+		Channel *Channel
+		User    *User
+	}
 	EventMessageReceived struct {
 		Timestamp   time.Time
 		Channel     *Channel
@@ -15,15 +25,28 @@ type (
 		Message     Message
 	}
 
-	EventUserstate  struct{}
-	EventUsernotice struct {
-		Usernotice Usernotice
+	EventUserstate struct {
+		Channel *Channel
+		User    *User
 	}
 	EventRoomstate struct {
 		Channel *Channel
 	}
+	EventSub                 struct{}
+	EventResub               struct{}
+	EventSubgift             struct{}
+	EventAnonsubgift         struct{}
+	EventSubmysterygift      struct{}
+	EventGiftpaidupgrade     struct{}
+	EventRewardgift          struct{}
+	EventAnongiftpaidupgrade struct{}
+	EventRaid                struct{}
+	EventUnraid              struct{}
+	EventRitual              struct{}
+	EventBitsbadgetier       struct{}
 
 	EventClearchat struct {
+		Timestamp   time.Time
 		BanDuration int64
 		Channel     *Channel
 		User        *User
@@ -38,28 +61,3 @@ type (
 		Err error
 	}
 )
-
-func (t *Twitch) eventTrigger() chan interface{} {
-	ch := make(chan interface{})
-
-	go func() {
-		for event := range t.cEvents {
-			ch <- event
-
-			switch event.(type) {
-			case EventConnected:
-				t.SendCommand("CAP REQ :twitch.tv/membership")
-				t.SendCommand("CAP REQ :twitch.tv/tags")
-				t.SendCommand("CAP REQ :twitch.tv/commands")
-				for _, channel := range t.opts.Channels {
-					t.JoinChannel(channel)
-				}
-
-			case EventPinged:
-				t.SendCommand("PONG :tmi.twitch.tv")
-			}
-		}
-	}()
-
-	return ch
-}

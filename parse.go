@@ -1,84 +1,23 @@
-package bot
+package twirgo
 
 import (
+	"fmt"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
-type (
-	User struct {
-		Username    string
-		DisplayName string
-		Color       string
-		IsPartner   bool
-	}
+type parsedLine struct {
+	tags    Tags
+	user    *User
+	t       string
+	channel *Channel
+	message Message
+}
 
-	ChannelUser struct {
-		User             *User
-		SubscriberMonths int64
-
-		IsMod         bool
-		IsBroadcaster bool
-		IsSubscriber  bool
-		IsVIP         bool
-	}
-
-	Channel struct {
-		Name          string
-		Users         map[string]*User
-		EmoteOnly     bool
-		FollowersOnly bool
-		// only messages with more than 9 chars allowed & must be unique
-		R9k      bool
-		Slow     bool
-		SubsOnly bool
-	}
-
-	Message struct {
-		Content string
-		Id      string
-	}
-
-	// Usernotice holds all information of an USERNOTICE irc event
-	// https://dev.twitch.tv/docs/irc/tags#usernotice-twitch-tags
-	Usernotice struct {
-		Type               string
-		Message            string
-		Channel            *Channel
-		SubscriberMonths   int64
-		Color              string
-		DisplayName        string
-		User               *User
-		SystemMsg          string
-		Timestamp          time.Time
-		Raider             *User
-		Promo              *Promo
-		Recipient          *User
-		Sender             *User
-		ShouldShareStreak  bool
-		StreakMonths       int64
-		SubTier            SubTier
-		SubPlanName        string
-		RaidingViewerCount int64
-		RitualName         string
-		EarnedBadgeTier    int64
-	}
-
-	Promo struct {
-		GiftTotal int64
-		Name      string
-	}
-
-	SubTier interface{}
-
-	SubTierPrime struct{}
-	SubTierOne   struct{}
-	SubTierTwo   struct{}
-	SubTierThree struct{}
-)
-
+// convertTmiTs converts a TMI-TS which is a unix timestamp in milliseconds to a time.Time
 func (t *Twitch) convertTmiTs(tmiTs string) (time.Time, error) {
 	unixTimestamp, err := strconv.ParseInt(tmiTs, 10, 64)
 	if err != nil {
@@ -88,65 +27,10 @@ func (t *Twitch) convertTmiTs(tmiTs string) (time.Time, error) {
 	return timestamp, nil
 }
 
+// toInt converts a string into an int64
 func (t *Twitch) toInt(s string) int64 {
 	i, _ := strconv.ParseInt(s, 10, 64)
 	return i
-}
-
-// parsePRIVMSG parses the PRIVMSG event of the IRC protocol
-func (t *Twitch) parsePRIVMSG(line string) (time.Time, *Channel, ChannelUser, Message) {
-	parts := strings.Split(strings.TrimLeft(line, "@"), " :")
-	infos := strings.Split(parts[0], ";")
-	message := Message{
-		Content: strings.Join(parts[2:], " :"),
-	}
-
-	timestamp := time.Now()
-	channel, _ := t.getChannel(strings.Split(parts[1], "#")[1])
-
-	username := strings.Split(parts[1], "!")[0]
-	user, _ := t.getUser(username)
-	channelUser := ChannelUser{
-		User: user,
-	}
-
-	for _, info := range infos {
-		infoSplit := strings.Split(info, "=")
-		k, v := infoSplit[0], infoSplit[1]
-		switch k {
-		case "tmi-sent-ts":
-			timestamp, _ = t.convertTmiTs(v)
-
-		case "badge-info":
-			if strings.Contains(v, "subscriber") {
-				channelUser.IsSubscriber = true
-				// TODO: check if there is also the streak information available
-				channelUser.SubscriberMonths = t.toInt(strings.Split(v, "/")[1])
-			}
-
-		case "badges":
-			channelUser.IsBroadcaster = strings.Contains(v, "broadcaster")
-			channelUser.User.IsPartner = strings.Contains(v, "partner")
-			channelUser.IsMod = strings.Contains(v, "moderator") || channelUser.IsBroadcaster
-			channelUser.IsVIP = strings.Contains(v, "vip")
-
-		case "color":
-			channelUser.User.Color = v
-
-		case "display-name":
-			channelUser.User.DisplayName = v
-
-		case "mod":
-			channelUser.IsMod, _ = strconv.ParseBool(v)
-
-		case "id":
-			message.Id = v
-		}
-	}
-
-	t.addUserToChannel(username, channel.Name)
-
-	return timestamp, channel, channelUser, message
 }
 
 // parseJOINPART parses the JOIN and PART events of the IRC protocol
@@ -161,271 +45,258 @@ func (t *Twitch) parseJOINPART(line string) {
 	}
 }
 
-// parseROOMSTATE parses the ROOMSTATE event of the irc protocol
-func (t *Twitch) parseROOMSTATE(line string) (*Channel, error) {
-	channel, err := t.getChannel(strings.Split(line, "#")[1])
-	if err == ErrInvalidChannel {
-		return nil, err
+func (t *Twitch) parseTags(tags string) Tags {
+	tagMap := make(Tags)
+
+	for _, tag := range strings.Split(tags, ";") {
+		s := strings.Split(tag, "=")
+		tagMap[s[0]] = s[1]
 	}
 
-	channel.EmoteOnly = strings.Contains(line, "emote-only=1")
-	channel.FollowersOnly = !strings.Contains(line, "followers-only=-1")
-	channel.R9k = strings.Contains(line, "r9k=1")
-	channel.Slow = strings.Contains(line, "slow=1")
-	channel.SubsOnly = strings.Contains(line, "subs-only=1")
-
-	return channel, nil
+	return tagMap
 }
 
-func (t *Twitch) parseUSERNOTICE(line string) Usernotice {
-	line = strings.TrimLeft(line, "@")
-	// > @badge-info=<badge-info>;badges=<badges>;color=<color>;
-	// display-name=<display-name>;emotes=<emotes>;id=<id-of-msg>;
-	// login=<user>;mod=<mod>;msg-id=<msg-id>;room-id=<room-id>;
-	// subscriber=<subscriber>;system-msg=<system-msg>;tmi-sent-ts=<timestamp>;
-	// turbo=<turbo>;user-id=<user-id>;user-type=<user-type>
-	//  :tmi.twitch.tv USERNOTICE #<channel> :<message>
-	parts := strings.Split(line, " :")
+func (t *Twitch) parseBadges(badgesString string) *Badges {
+	b := make(Badges)
 
-	channel, _ := t.getChannel(strings.Split(parts[1], "#")[1])
-	usernotice := Usernotice{
-		Channel: channel,
-		Promo:   &Promo{},
-	}
-
-	// Usernotice is with message
-	switch {
-	case len(parts) == 3:
-		usernotice.Message = parts[2]
-	case len(parts) > 3:
-		usernotice.Message = strings.Join(parts[2:], " :")
-	}
-
-	isBroadcaster := false
-
-	infos := strings.Split(parts[0], ";")
-	for _, info := range infos {
-		infoSplit := strings.Split(info, "=")
-		k, v := infoSplit[0], infoSplit[1]
-		switch k {
-		case "badge-info":
-			if strings.Contains(v, "subscriber") {
-				usernotice.SubscriberMonths = t.toInt(strings.Split(v, "/")[1])
+	if badgesString != "" {
+		if strings.Contains(badgesString, ",") {
+			for _, badge := range strings.Split(badgesString, ",") {
+				badgeInfo := strings.Split(badge, "/")
+				b[badgeInfo[0]] = t.toInt(badgeInfo[1])
 			}
-
-		case "badges":
-			// TODO: parse badges and place them in own structs
-			isBroadcaster = strings.Contains(v, "broadcaster")
-
-		case "color":
-			usernotice.Color = v
-
-		case "display-name":
-			usernotice.DisplayName = v
-
-		case "emotes":
-			// TODO: parse emotes and place them in own structs
-
-		case "login":
-			// check if usernotice was triggered anonymously
-			if channel.Name != v || isBroadcaster {
-				usernotice.User, _ = t.getUser(v)
-			}
-		case "msg-id":
-			usernotice.Type = v
-
-		case "system-msg":
-			usernotice.SystemMsg = v
-
-		case "tmi-sent-ts":
-			usernotice.Timestamp, _ = t.convertTmiTs(v)
-
-		case "msg-param-cumulative-months":
-			fallthrough
-		case "msg-param-months":
-			usernotice.SubscriberMonths = t.toInt(strings.Split(v, "/")[1])
-
-		case "msg-param-displayName":
-			usernotice.Raider, _ = t.getUser(v)
-			usernotice.Raider.DisplayName = v
-
-		case "msg-param-login":
-			// we do not parse this field because its already handled in msg-param-displayName
-
-		case "msg-param-promo-gift-total":
-			usernotice.Promo.GiftTotal = t.toInt(v)
-
-		case "msg-param-promo-name":
-			usernotice.Promo.Name = v
-
-		case "msg-param-recipient-display-name":
-			usernotice.Recipient, _ = t.getUser(v)
-
-		case "msg-param-recipient-id":
-			// we actually do not need this field
-
-		case "msg-param-recipient-user-name":
-			// we do not parse this field because its already handled in msg-param-recipient-display-name
-
-		case "msg-param-sender-login":
-			// we do not parse this field because its already handled in msg-param-sender-name
-
-		case "msg-param-sender-name":
-			usernotice.Sender, _ = t.getUser(v)
-
-		case "msg-param-should-share-streak":
-			usernotice.ShouldShareStreak, _ = strconv.ParseBool(v)
-
-		case "msg-param-streak-months":
-			usernotice.StreakMonths = t.toInt(v)
-
-		case "msg-param-sub-plan":
-			switch v {
-			case "Prime":
-				usernotice.SubTier = SubTierPrime{}
-			case "1000":
-				usernotice.SubTier = SubTierOne{}
-			case "2000":
-				usernotice.SubTier = SubTierTwo{}
-			case "3000":
-				usernotice.SubTier = SubTierThree{}
-			}
-
-		case "msg-param-sub-plan-name":
-			usernotice.SubPlanName = v
-
-		case "msg-param-viewerCount":
-			usernotice.RaidingViewerCount = t.toInt(v)
-
-		case "msg-param-ritual-name":
-			usernotice.RitualName = v
-
-		case "msg-param-threshold":
-			usernotice.EarnedBadgeTier = t.toInt(v)
+		} else {
+			badgeInfo := strings.Split(badgesString, "/")
+			b[badgeInfo[0]] = t.toInt(badgeInfo[1])
 		}
 	}
 
-	return usernotice
+	return &b
 }
 
-func (t *Twitch) parseCLEARCHAT(line string) (int64, *Channel, *User, error) {
-	line = strings.TrimSpace(line)
-
-	var parts []string
-	var banDuration int64
-
-	// check if ban-duration is delivered
-	if strings.HasPrefix(line, "@") {
-		parts = strings.Split(strings.TrimLeft(line, "@"), " :")
-
-		banDuration = t.toInt(strings.Split(parts[0], "=")[1])
-	} else {
-		parts = strings.Split(line, " :")
+func (t *Twitch) buildChannelUser(parsedLine *parsedLine) ChannelUser {
+	channelUser := ChannelUser{
+		User:   parsedLine.user,
+		Badges: t.parseBadges(parsedLine.tags["badges"]),
 	}
 
-	user, err := t.getUser(parts[2])
-	if err != nil {
-		return 0, nil, nil, err
+	badgeInfo := parsedLine.tags["badge-info"]
+	if badgeInfo != "" {
+		// there is currently only the subscriber months in it
+		parts := strings.Split(badgeInfo, "/")
+		channelUser.IsSubscriber = true
+		channelUser.SubscriberMonths = t.toInt(parts[1])
 	}
 
-	channel, err := t.getChannel(strings.Split(parts[1], "#")[1])
-	if err != nil {
-		return 0, nil, nil, err
+	channelUser.IsMod, _ = strconv.ParseBool(parsedLine.tags["mod"])
+	channelUser.IsBroadcaster = (*channelUser.Badges)["broadcaster"] == 1
+	// a broadcaster is also a mod
+	if channelUser.IsBroadcaster {
+		channelUser.IsMod = true
 	}
+	channelUser.IsVIP = (*channelUser.Badges)["vip"] == 1
+	channelUser.User.IsPartner = (*channelUser.Badges)["parner"] == 1
 
-	return banDuration, channel, user, nil
+	channelUser.User.DisplayName = parsedLine.tags["display-name"]
+
+	channelUser.User.Color = parsedLine.tags["color"]
+
+	return channelUser
 }
 
-func (t *Twitch) parseCLEARMSG(line string) (*User, *Channel, Message, error) {
-	parts := strings.Split(strings.TrimLeft(line, "@"), " :")
+func (t *Twitch) parseUSERNOTICE(parsedLine *parsedLine) {
+	var subTier SubTier
 
-	var message Message
-	var user *User
+	switch parsedLine.tags["msg-param-sub-plan"] {
+	case "Prime":
+		subTier = SubTierPrime{Name: parsedLine.tags["msg-param-sub-plan-name"]}
 
-	channel, err := t.getChannel(strings.Split(parts[1], "#")[1])
-	if err != nil {
-		return nil, nil, message, err
+	case "1000":
+		subTier = SubTierOne{Name: parsedLine.tags["msg-param-sub-plan-name"]}
+
+	case "2000":
+		subTier = SubTierTwo{Name: parsedLine.tags["msg-param-sub-plan-name"]}
+
+	case "3000":
+		subTier = SubTierThree{Name: parsedLine.tags["msg-param-sub-plan-name"]}
+
 	}
 
-	if len(parts) > 3 {
-		message.Content = strings.Join(parts[2:], " :")
-	} else {
-		message.Content = parts[2]
-	}
+	switch parsedLine.tags["msg-id"] {
+	case "sub":
+		fallthrough
 
-	items := strings.Split(parts[0], ";")
-	for _, item := range items {
-		itemSplit := strings.Split(item, "=")
-		k, v := itemSplit[0], itemSplit[1]
-		switch k {
-		case "login":
-			user, err = t.getUser(v)
-			if err != nil {
-				return nil, nil, message, err
-			}
-		case "target-msg-id":
-			message.Id = v
+	case "resub":
+		shareStreak, _ := strconv.ParseBool(parsedLine.tags["msg-param-should-share-streak"])
+
+		t.cEvents <- Sub{
+			Months:       t.toInt(parsedLine.tags["msg-param-cumulative-months"]),
+			ShareStreak:  shareStreak,
+			StreakMonths: t.toInt(parsedLine.tags["msg-param-streak-months"]),
+			SubTier:      &subTier,
 		}
-	}
 
-	return user, channel, message, nil
+	case "subgift":
+		fallthrough
+
+	case "anonsubgift":
+		user, _ := t.getUser(parsedLine.tags["msg-param-recipient-user-name"])
+		user.DisplayName = parsedLine.tags["msg-param-recipient-display-name"]
+		user.Id = t.toInt(parsedLine.tags["msg-param-recipient-id"])
+
+		t.cEvents <- Subgift{
+			Months:  t.toInt(parsedLine.tags["msg-param-cumulative-months"]),
+			User:    user,
+			SubTier: &subTier,
+		}
+
+	case "submysterygift":
+		t.cEvents <- Submysterygift{}
+
+	case "giftpaidupgrade":
+		user, _ := t.getUser(parsedLine.tags["msg-param-sender-login"])
+		user.DisplayName = parsedLine.tags["msg-param-sender-name"]
+
+		t.cEvents <- Giftpaidupgrade{
+			Gifts: t.toInt(parsedLine.tags["msg-param-months"]),
+			Name:  parsedLine.tags["msg-param-promo-name"],
+			User:  user,
+		}
+
+	case "rewardgift":
+		t.cEvents <- Rewardgift{}
+
+	case "anongiftpaidupgrade":
+		t.cEvents <- Anongiftpaidupgrade{
+			Gifts: t.toInt(parsedLine.tags["msg-param-months"]),
+			Name:  parsedLine.tags["msg-param-promo-name"],
+		}
+
+	case "raid":
+		user, _ := t.getUser(parsedLine.tags["msg-param-login"])
+		user.DisplayName = parsedLine.tags["msg-param-displayName"]
+
+		t.cEvents <- Raid{
+			User:        user,
+			ViewerCount: t.toInt(parsedLine.tags["msg-param-viewerCount"]),
+		}
+
+	case "unraid":
+		t.cEvents <- Unraid{}
+
+	case "ritual":
+		t.cEvents <- Ritual{
+			Name: parsedLine.tags["msg-param-ritual-name"],
+		}
+
+	case "bitsbadgetier":
+		t.cEvents <- Cheer{
+			BadgeTier: t.toInt(parsedLine.tags["msg-param-threshold"]),
+		}
+
+	}
 }
 
-// parseLine
+// parseLine parses every line that was received from the IRC server
 func (t *Twitch) parseLine(line string) {
 	switch {
-	case strings.HasPrefix(line, "PING"):
-		t.cEvents <- EventPinged{}
-
 	case strings.HasPrefix(line, ":tmi.twitch.tv 001"):
+		t.SendCommand("CAP REQ :twitch.tv/membership")
+		t.SendCommand("CAP REQ :twitch.tv/tags")
+		t.SendCommand("CAP REQ :twitch.tv/commands")
+		for _, channel := range t.opts.Channels {
+			t.JoinChannel(channel)
+		}
+
 		t.cEvents <- EventConnected{}
+		return
 
-	case strings.HasPrefix(line, ":") && strings.Contains(line, "JOIN"):
-		t.parseJOINPART(line)
-		t.cEvents <- EventUserJoined{}
+	case strings.HasPrefix(line, "PING"):
+		t.SendCommand("PONG :tmi.twitch.tv")
 
-	case strings.HasPrefix(line, ":") && strings.Contains(line, "PART"):
-		t.parseJOINPART(line)
-		t.cEvents <- EventUserParted{}
+		t.cEvents <- EventPinged{}
+		return
+	}
 
-	case strings.Contains(line, "PRIVMSG"):
-		timestamp, channel, user, message := t.parsePRIVMSG(line)
-		t.cEvents <- EventMessageReceived{Timestamp: timestamp, Channel: channel, Message: message, ChannelUser: user}
+	// parse every other event of the irc protocol
 
-	case strings.Contains(line, "USERSTATE"):
-		// we don't need to parse this event cause every message a user writes
-		// all these informations are also provided
-		t.cEvents <- EventUserstate{}
+	var parsedLine parsedLine
+	var timestamp time.Time
 
-	case strings.Contains(line, "ROOMSTATE"):
-		channel, err := t.parseROOMSTATE(line)
-		if err == ErrInvalidChannel {
-			// TODO: log
-			return
+	matches := regexp.MustCompile(`^(@(.+)\s+)?:(([^!]+).+)?tmi\.twitch\.tv\s+([A-Z]+)\s+#(\w+)(\s+:(.+))?$`).FindAllStringSubmatch(line, -1)
+
+	if matches == nil {
+		log.Println("vvvvvvvvvvvv")
+		log.Println(line)
+		log.Println("^^^^^^^^^^^^")
+	} else {
+		switch {
+		case strings.HasPrefix(line, "@"):
+			parsedLine.tags = t.parseTags(matches[0][2])
+
+			parsedLine.channel, _ = t.getChannel(matches[0][6])
+			parsedLine.user, _ = t.getUser(matches[0][4])
+
+			parsedLine.t = matches[0][5]
+
+			timestamp, _ = t.convertTmiTs(parsedLine.tags["tmi-sent-ts"])
+			if parsedLine.tags["tmi-sent-ts"] != "" {
+				timestamp, _ = t.convertTmiTs(parsedLine.tags["tmi-sent-ts"])
+			}
+
+		default:
+			parsedLine.user, _ = t.getUser(matches[0][4])
+			parsedLine.channel, _ = t.getChannel(matches[0][6])
+			parsedLine.t = matches[0][5]
 		}
+	}
 
-		t.cEvents <- EventRoomstate{Channel: channel}
+	switch parsedLine.t {
+	case "PRIVMSG":
+		parsedLine.message = Message{
+			Content: matches[0][8],
+			Id:      parsedLine.tags["id"],
+		}
+		t.cEvents <- EventMessageReceived{Timestamp: timestamp, Channel: parsedLine.channel, Message: parsedLine.message, ChannelUser: t.buildChannelUser(&parsedLine)}
 
-	case strings.Contains(line, "USERNOTICE"):
-		// TODO: split this up in different events like sub, resub, anonsub, subgift etc
-		usernotice := t.parseUSERNOTICE(line)
-		t.cEvents <- EventUsernotice{Usernotice: usernotice}
+	case "JOIN":
+		t.cEvents <- EventUserJoined{Channel: parsedLine.channel, User: parsedLine.user}
 
-	case strings.Contains(line, "CLEARCHAT"):
-		banDuration, channel, user, err := t.parseCLEARCHAT(line)
+	case "PART":
+		t.cEvents <- EventUserParted{Channel: parsedLine.channel, User: parsedLine.user}
+
+	case "USERSTATE":
+		t.cEvents <- EventUserstate{Channel: parsedLine.channel, User: parsedLine.user}
+
+	case "ROOMSTATE":
+		// channel, err := t.parseROOMSTATE(line)
+		parsedLine.channel.EmoteOnly, _ = strconv.ParseBool(parsedLine.tags["emote-only"])
+		parsedLine.channel.FollowersOnly = parsedLine.tags["followers-only"] != "-1"
+		parsedLine.channel.R9k, _ = strconv.ParseBool(parsedLine.tags["r9k"])
+		parsedLine.channel.Slow, _ = strconv.ParseBool(parsedLine.tags["slow"])
+		parsedLine.channel.SubsOnly, _ = strconv.ParseBool(parsedLine.tags["subs-only"])
+
+		t.cEvents <- EventRoomstate{Channel: parsedLine.channel}
+
+	case "USERNOTICE":
+		// USERNOTICE holds many different events - is handled in own method
+		t.parseUSERNOTICE(&parsedLine)
+
+	case "CLEARCHAT":
+		var err error
+		parsedLine.user, err = t.getUser(matches[0][8])
 		if err != nil {
-			// TODO: log
+			// stop further processing, username is mandatory for this event
+			log.Println("Invalid username on CLEARCHAT event", err)
 			return
 		}
-		t.cEvents <- EventClearchat{BanDuration: banDuration, Channel: channel, User: user}
+		parsedLine.user.Id = t.toInt(parsedLine.tags["target-user-id"])
 
-	case strings.Contains(line, "CLEARMSG"):
-		user, channel, message, err := t.parseCLEARMSG(line)
-		if err != nil {
-			// TODO: log
-			return
-		}
-		t.cEvents <- EventClearmsg{User: user, Channel: channel, Message: message}
+		t.cEvents <- EventClearchat{Timestamp: timestamp, BanDuration: t.toInt(parsedLine.tags["bad-duration"]), Channel: parsedLine.channel, User: parsedLine.user}
+
+	case "CLEARMSG":
+		fmt.Printf("%+v\n", parsedLine.message)
+		t.cEvents <- EventClearmsg{User: parsedLine.user, Channel: parsedLine.channel, Message: parsedLine.message}
 
 	default:
 		log.Println("unhandled event", line)

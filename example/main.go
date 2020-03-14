@@ -4,23 +4,23 @@ import (
 	"log"
 	"os"
 
-	bot "github.com/curi0s/twirgo"
+	"github.com/curi0s/twirgo"
 )
 
-func handleEvents(t *bot.Twitch, ch chan interface{}) error {
+func handleEvents(t *twirgo.Twitch, ch chan interface{}) error {
 	for event := range ch {
 		switch ev := event.(type) {
-		case bot.EventConnected:
-			log.Println("Connected!")
-			t.SendMessage(t.Options().DefaultChannel, "HeyGuys")
+		// case twirgo.EventConnected:
+		// 	log.Println("Connected!")
+		// 	t.SendMessage(t.Options().DefaultChannel, "HeyGuys")
 
-		// case bot.EventMessageReceived:
+		// case twirgo.EventMessageReceived:
 		// 	fmt.Printf("%+v\n", ev)
 		// 	fmt.Printf("%+v\n", ev.ChannelUser)
 		// 	fmt.Printf("%+v\n", ev.ChannelUser.User)
 		// 	fmt.Println(ev.Channel.Name, ev.Message)
 
-		case bot.ConnectionError:
+		case twirgo.EventConnectionError:
 			return ev.Err
 		}
 	}
@@ -34,7 +34,7 @@ func main() {
 		log.Fatal("Empty TOKEN")
 	}
 
-	t := bot.NewTwitch(bot.Options{
+	t := twirgo.NewTwitch(twirgo.Options{
 		Username:       "curi0sde_bot",
 		Token:          token,
 		Channels:       []string{"curi0sde"},

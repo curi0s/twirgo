@@ -1,4 +1,4 @@
-package bot
+package twirgo
 
 import (
 	"bufio"
@@ -17,7 +17,7 @@ type Options struct {
 	DefaultChannel string
 }
 
-// Twitch is a twitch IRC bot.
+// Twitch is a Twitch IRC bot.
 type Twitch struct {
 	opts     Options
 	channels map[string]*Channel
@@ -44,6 +44,7 @@ func NewTwitch(options Options) *Twitch {
 	}
 }
 
+// Options returns the configured options for the this bot
 func (t *Twitch) Options() Options {
 	return t.opts
 }
@@ -64,7 +65,23 @@ func (t *Twitch) Connect() chan interface{} {
 	t.SendCommand("PASS " + t.opts.Token)
 	t.SendCommand("NICK " + t.opts.Username)
 
-	return t.eventTrigger()
+	return t.cEvents
+}
+
+// receive reads the buffer of the connection and parses all events
+func (t *Twitch) receive() {
+	buf := bufio.NewReader(t.conn)
+	for {
+		line, err := buf.ReadString('\n')
+		if err != nil {
+			t.cEvents <- EventConnectionError{Err: err}
+			return
+		}
+
+		line = strings.TrimSpace(line)
+
+		t.parseLine(line)
+	}
 }
 
 // send writes the formatted message to the connection
@@ -86,13 +103,16 @@ func (t *Twitch) SendCommand(message string) {
 
 // JoinChannel joins the given channel
 func (t *Twitch) JoinChannel(channel string) {
+	channel = strings.ToLower(strings.TrimLeft(channel, "#"))
 	t.getChannel(channel)
-	t.SendCommand("JOIN #" + strings.TrimLeft(channel, "#"))
+	t.SendCommand("JOIN #" + channel)
+	t.cEvents <- EventJoinedChannel{}
 }
 
 // PartChannel parts the given channel
 func (t *Twitch) PartChannel(channel string) {
 	t.SendCommand("PART #" + strings.TrimLeft(channel, "#"))
+	t.cEvents <- EventPartedChannel{}
 }
 
 // getUser returns or creates the given user in the internal global list
@@ -143,20 +163,4 @@ func (t *Twitch) addUserToChannel(username string, channel string) {
 	}
 
 	c.Users[username] = u
-}
-
-// receive reads the buffer of the connection and parses all events
-func (t *Twitch) receive() {
-	buf := bufio.NewReader(t.conn)
-	for {
-		line, err := buf.ReadString('\n')
-		if err != nil {
-			t.cEvents <- EventConnectionError{Err: err}
-			return
-		}
-
-		line = strings.TrimSpace(line)
-
-		t.parseLine(line)
-	}
 }
