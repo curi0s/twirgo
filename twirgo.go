@@ -29,12 +29,12 @@ type Twitch struct {
 }
 
 var (
-	ErrInvalidUsername = errors.New("invalid username")
-	ErrInvalidChannel  = errors.New("invalid channel")
+	ErrInvalidUsername = errors.New("invalid username provided")
+	ErrInvalidChannel  = errors.New("invalid channel provided")
 )
 
-// NewTwitch returns a new Twitch bot.
-func NewTwitch(options Options) *Twitch {
+// NewTwirgo returns a new Twitch bot.
+func NewTwirgo(options Options) *Twitch {
 	return &Twitch{
 		opts:     options,
 		channels: make(map[string]*Channel),
@@ -93,7 +93,12 @@ func (t *Twitch) send() {
 
 // SendMessage sends a message
 func (t *Twitch) SendMessage(channel, message string) {
-	t.SendCommand("PRIVMSG #" + strings.TrimLeft(channel, "#") + " : " + message)
+	c, err := t.getChannel(channel)
+	if err != nil {
+		return
+	}
+
+	t.SendCommand("PRIVMSG #" + c.Name + " : " + message)
 }
 
 // SendCommand sends a command
@@ -103,15 +108,23 @@ func (t *Twitch) SendCommand(message string) {
 
 // JoinChannel joins the given channel
 func (t *Twitch) JoinChannel(channel string) {
-	channel = strings.ToLower(strings.TrimLeft(channel, "#"))
-	t.getChannel(channel)
-	t.SendCommand("JOIN #" + channel)
+	c, err := t.getChannel(channel)
+	if err != nil {
+		return
+	}
+
+	t.SendCommand("JOIN #" + c.Name)
 	t.cEvents <- EventJoinedChannel{}
 }
 
 // PartChannel parts the given channel
 func (t *Twitch) PartChannel(channel string) {
-	t.SendCommand("PART #" + strings.TrimLeft(channel, "#"))
+	c, err := t.getChannel(channel)
+	if err != nil {
+		return
+	}
+
+	t.SendCommand("PART #" + c.Name)
 	t.cEvents <- EventPartedChannel{}
 }
 
@@ -151,16 +164,6 @@ func (t *Twitch) getChannel(channel string) (*Channel, error) {
 }
 
 // addUserToChannel links an internal global user to an internal global channel
-func (t *Twitch) addUserToChannel(username string, channel string) {
-	c, err := t.getChannel(channel)
-	if err == ErrInvalidChannel {
-		return
-	}
-
-	u, err := t.getUser(username)
-	if err == ErrInvalidUsername {
-		return
-	}
-
-	c.Users[username] = u
+func (t *Twitch) addUserToChannel(user *User, channel *Channel) {
+	channel.Users[user.Username] = user
 }

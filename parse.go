@@ -1,7 +1,6 @@
 package twirgo
 
 import (
-	"fmt"
 	"log"
 	"regexp"
 	"strconv"
@@ -35,13 +34,12 @@ func (t *Twitch) toInt(s string) int64 {
 
 // parseJOINPART parses the JOIN and PART events of the IRC protocol
 func (t *Twitch) parseJOINPART(line string) {
-	username := strings.TrimLeft(strings.Split(line, "!")[0], ":")
-	channel := strings.Split(line, "#")[1]
-	c := t.channels[channel]
+	user, _ := t.getUser(strings.TrimLeft(strings.Split(line, "!")[0], ":"))
+	channel, _ := t.getChannel(strings.Split(line, "#")[1])
 	if strings.Contains(line, "JOIN") {
-		t.addUserToChannel(username, channel)
+		t.addUserToChannel(user, channel)
 	} else {
-		delete(c.Users, username)
+		delete(channel.Users, user.Username)
 	}
 }
 
@@ -96,9 +94,7 @@ func (t *Twitch) buildChannelUser(parsedLine *parsedLine) ChannelUser {
 	}
 	channelUser.IsVIP = (*channelUser.Badges)["vip"] == 1
 	channelUser.User.IsPartner = (*channelUser.Badges)["parner"] == 1
-
 	channelUser.User.DisplayName = parsedLine.tags["display-name"]
-
 	channelUser.User.Color = parsedLine.tags["color"]
 
 	return channelUser
@@ -222,6 +218,7 @@ func (t *Twitch) parseLine(line string) {
 
 	var parsedLine parsedLine
 	var timestamp time.Time
+	var err error
 
 	matches := regexp.MustCompile(`^(@(.+)\s+)?:(([^!]+).+)?tmi\.twitch\.tv\s+([A-Z]+)\s+#(\w+)(\s+:(.+))?$`).FindAllStringSubmatch(line, -1)
 
@@ -230,33 +227,31 @@ func (t *Twitch) parseLine(line string) {
 		log.Println(line)
 		log.Println("^^^^^^^^^^^^")
 	} else {
-		switch {
-		case strings.HasPrefix(line, "@"):
+		parsedLine.channel, _ = t.getChannel(matches[0][6])
+		parsedLine.user, _ = t.getUser(matches[0][4])
+		parsedLine.t = matches[0][5]
+
+		if strings.HasPrefix(line, "@") {
 			parsedLine.tags = t.parseTags(matches[0][2])
-
-			parsedLine.channel, _ = t.getChannel(matches[0][6])
-			parsedLine.user, _ = t.getUser(matches[0][4])
-
-			parsedLine.t = matches[0][5]
 
 			timestamp, _ = t.convertTmiTs(parsedLine.tags["tmi-sent-ts"])
 			if parsedLine.tags["tmi-sent-ts"] != "" {
 				timestamp, _ = t.convertTmiTs(parsedLine.tags["tmi-sent-ts"])
 			}
 
-		default:
-			parsedLine.user, _ = t.getUser(matches[0][4])
-			parsedLine.channel, _ = t.getChannel(matches[0][6])
-			parsedLine.t = matches[0][5]
+			parsedLine.message = Message{
+				Content: matches[0][8],
+			}
 		}
+	}
+
+	if parsedLine.user != nil && parsedLine.channel != nil {
+		t.addUserToChannel(parsedLine.user, parsedLine.channel)
 	}
 
 	switch parsedLine.t {
 	case "PRIVMSG":
-		parsedLine.message = Message{
-			Content: matches[0][8],
-			Id:      parsedLine.tags["id"],
-		}
+		parsedLine.message.Id = parsedLine.tags["id"]
 		t.cEvents <- EventMessageReceived{Timestamp: timestamp, Channel: parsedLine.channel, Message: parsedLine.message, ChannelUser: t.buildChannelUser(&parsedLine)}
 
 	case "JOIN":
@@ -269,7 +264,6 @@ func (t *Twitch) parseLine(line string) {
 		t.cEvents <- EventUserstate{Channel: parsedLine.channel, User: parsedLine.user}
 
 	case "ROOMSTATE":
-		// channel, err := t.parseROOMSTATE(line)
 		parsedLine.channel.EmoteOnly, _ = strconv.ParseBool(parsedLine.tags["emote-only"])
 		parsedLine.channel.FollowersOnly = parsedLine.tags["followers-only"] != "-1"
 		parsedLine.channel.R9k, _ = strconv.ParseBool(parsedLine.tags["r9k"])
@@ -283,7 +277,6 @@ func (t *Twitch) parseLine(line string) {
 		t.parseUSERNOTICE(&parsedLine)
 
 	case "CLEARCHAT":
-		var err error
 		parsedLine.user, err = t.getUser(matches[0][8])
 		if err != nil {
 			// stop further processing, username is mandatory for this event
@@ -295,8 +288,35 @@ func (t *Twitch) parseLine(line string) {
 		t.cEvents <- EventClearchat{Timestamp: timestamp, BanDuration: t.toInt(parsedLine.tags["bad-duration"]), Channel: parsedLine.channel, User: parsedLine.user}
 
 	case "CLEARMSG":
-		fmt.Printf("%+v\n", parsedLine.message)
-		t.cEvents <- EventClearmsg{User: parsedLine.user, Channel: parsedLine.channel, Message: parsedLine.message}
+		parsedLine.user, err = t.getUser(parsedLine.tags["login"])
+		if err != nil {
+			return
+		}
+		parsedLine.message.Id = parsedLine.tags["target-msg-id"]
+
+		t.cEvents <- EventClearmsg{Timestamp: timestamp, User: parsedLine.user, Channel: parsedLine.channel, Message: parsedLine.message}
+
+	case "NOTICE":
+		t.cEvents <- EventNotice{MsgId: parsedLine.tags["msg-id"], Channel: parsedLine.channel}
+
+	case "HOSTTARGET":
+		var viewers int64
+		var toChannel string
+
+		if strings.Contains(parsedLine.message.Content, " ") {
+			parts := strings.Split(parsedLine.message.Content, " ")
+			toChannel = parts[0]
+			viewers = t.toInt(parts[1])
+		} else {
+			toChannel = parsedLine.message.Content
+		}
+
+		if toChannel != "-" {
+			tC, _ := t.getChannel(toChannel)
+			t.cEvents <- EventStartHosting{FromChannel: parsedLine.channel, ToChannel: tC, Viewers: viewers}
+		} else {
+			t.cEvents <- EventStopHosting{FromChannel: parsedLine.channel, Viewers: viewers}
+		}
 
 	default:
 		log.Println("unhandled event", line)

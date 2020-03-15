@@ -34,10 +34,10 @@ func main() {
 		log.Fatal("Empty TOKEN")
 	}
 
-	t := twirgo.NewTwitch(twirgo.Options{
+	t := twirgo.NewTwirgo(twirgo.Options{
 		Username:       "curi0sde_bot",
 		Token:          token,
-		Channels:       []string{"curi0sde"},
+		Channels:       []string{"curi0sde", "rocketleague", "AdmiralBahroo", "summit1g"},
 		DefaultChannel: "curi0sde",
 	})
 

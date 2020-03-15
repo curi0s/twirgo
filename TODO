@@ -1,11 +1,13 @@
 Common:
     ☐ Add missing docs on methods/types @created(20-03-14 13:51)
     ☐ Add integration for callbacks @created(20-03-14 13:53)
+    ☐ Implement logging @created(20-03-15 19:35)
 
 Examples:
     ☐ Build more usable examples @created(20-03-14 13:53)
 
 Events:
-    ☐ Parse HOSTTARGET @created(20-03-14 13:50)
-    ☐ Parse NOTICE @created(20-03-14 13:51)
-    ☐ Parse RECONNECT @created(20-03-14 13:51)
+    ✔ Parse HOSTTARGET @created(20-03-14 13:50) @done(20-03-15 20:15)
+    ✔ Parse NOTICE @created(20-03-14 13:51) @done(20-03-15 19:47)
+    ✘ Parse RECONNECT @created(20-03-14 13:51) @cancelled(20-03-15 20:15)
+        A disconnect happens anyway - so no handling

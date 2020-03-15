@@ -5,6 +5,10 @@ import (
 )
 
 type (
+	EventConnectionError struct {
+		Err error
+	}
+
 	EventConnected     struct{}
 	EventPinged        struct{}
 	EventJoinedChannel struct{}
@@ -52,12 +56,25 @@ type (
 		User        *User
 	}
 	EventClearmsg struct {
-		User    *User
-		Channel *Channel
-		Message Message
+		Timestamp time.Time
+		User      *User
+		Channel   *Channel
+		Message   Message
 	}
 
-	EventConnectionError struct {
-		Err error
+	EventNotice struct {
+		MsgId   string
+		Channel *Channel
+	}
+
+	EventStartHosting struct {
+		FromChannel *Channel
+		ToChannel   *Channel
+		Viewers     int64 // might be 0 if not provided
+	}
+
+	EventStopHosting struct {
+		FromChannel *Channel
+		Viewers     int64 // might be 0 if not provided
 	}
 )
