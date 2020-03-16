@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -14,11 +15,21 @@ func handleEvents(t *twirgo.Twitch, ch chan interface{}) error {
 		// 	log.Println("Connected!")
 		// 	t.SendMessage(t.Options().DefaultChannel, "HeyGuys")
 
-		// case twirgo.EventMessageReceived:
-		// 	fmt.Printf("%+v\n", ev)
-		// 	fmt.Printf("%+v\n", ev.ChannelUser)
-		// 	fmt.Printf("%+v\n", ev.ChannelUser.User)
-		// 	fmt.Println(ev.Channel.Name, ev.Message)
+		case twirgo.EventChannelJoined:
+			fmt.Println("channel joined...")
+
+		case twirgo.EventChannelParted:
+			fmt.Println("channel parted...")
+
+		case twirgo.EventWhisperReceived:
+			fmt.Println("whisper received...")
+			t.SendWhisper(ev.User.Username, "hi")
+			t.PartChannel("curi0sde")
+
+		case twirgo.EventMessageReceived:
+			fmt.Println("message received...")
+			fmt.Println(ev.Message.Content)
+			t.SendMessage(ev.Channel.Name, "Thank you for your message :)")
 
 		case twirgo.EventConnectionError:
 			return ev.Err
@@ -29,20 +40,21 @@ func handleEvents(t *twirgo.Twitch, ch chan interface{}) error {
 }
 
 func main() {
-	token := os.Getenv("TOKEN")
-	if token == "" {
-		log.Fatal("Empty TOKEN")
+	options := twirgo.Options{
+		Username:       "curi0sde_bot",                       // the name of your bot account
+		Token:          os.Getenv("TOKEN"),                   // provide your token in any way you like
+		Channels:       []string{"curi0sde", "curi0sde_bot"}, // all channels will be joined at connect
+		DefaultChannel: "curi0sde",                           // have a look an #L16
 	}
 
-	t := twirgo.NewTwirgo(twirgo.Options{
-		Username:       "curi0sde_bot",
-		Token:          token,
-		Channels:       []string{"curi0sde", "rocketleague", "AdmiralBahroo", "summit1g"},
-		DefaultChannel: "curi0sde",
-	})
+	t := twirgo.NewTwirgo(options)
 
-	ch := t.Connect()
-	err := handleEvents(t, ch)
+	ch, err := t.Connect()
+	if err == twirgo.ErrInvalidToken {
+		log.Fatal(err)
+	}
+
+	err = handleEvents(t, ch)
 	if err != nil {
 		log.Fatal(err)
 	}

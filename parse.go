@@ -54,7 +54,7 @@ func (t *Twitch) parseTags(tags string) Tags {
 	return tagMap
 }
 
-func (t *Twitch) parseBadges(badgesString string) *Badges {
+func (t *Twitch) parseBadges(badgesString string) Badges {
 	b := make(Badges)
 
 	if badgesString != "" {
@@ -69,7 +69,7 @@ func (t *Twitch) parseBadges(badgesString string) *Badges {
 		}
 	}
 
-	return &b
+	return b
 }
 
 func (t *Twitch) buildChannelUser(parsedLine *parsedLine) ChannelUser {
@@ -87,13 +87,13 @@ func (t *Twitch) buildChannelUser(parsedLine *parsedLine) ChannelUser {
 	}
 
 	channelUser.IsMod, _ = strconv.ParseBool(parsedLine.tags["mod"])
-	channelUser.IsBroadcaster = (*channelUser.Badges)["broadcaster"] == 1
+	channelUser.IsBroadcaster = channelUser.Badges["broadcaster"] == 1
 	// a broadcaster is also a mod
 	if channelUser.IsBroadcaster {
 		channelUser.IsMod = true
 	}
-	channelUser.IsVIP = (*channelUser.Badges)["vip"] == 1
-	channelUser.User.IsPartner = (*channelUser.Badges)["parner"] == 1
+	channelUser.IsVIP = channelUser.Badges["vip"] == 1
+	channelUser.User.IsPartner = channelUser.Badges["parner"] == 1
 	channelUser.User.DisplayName = parsedLine.tags["display-name"]
 	channelUser.User.Color = parsedLine.tags["color"]
 
@@ -212,6 +212,13 @@ func (t *Twitch) parseLine(line string) {
 
 		t.cEvents <- EventPinged{}
 		return
+
+	case strings.HasPrefix(line, ":"+t.opts.Username+".tmi.twitch.tv 353"):
+		channel, _ := t.getChannel(strings.Split(strings.Split(line, " :")[0], "#")[1])
+		t.cEvents <- EventChannelJoined{Channel: channel}
+
+	case strings.HasPrefix(line, ":tmi.twitch.tv NOTICE * :"):
+		log.Fatal(strings.Split(line, " :")[1])
 	}
 
 	// parse every other event of the irc protocol
@@ -220,7 +227,7 @@ func (t *Twitch) parseLine(line string) {
 	var timestamp time.Time
 	var err error
 
-	matches := regexp.MustCompile(`^(@(.+)\s+)?:(([^!]+).+)?tmi\.twitch\.tv\s+([A-Z]+)\s+#(\w+)(\s+:(.+))?$`).FindAllStringSubmatch(line, -1)
+	matches := regexp.MustCompile(`^(@(.+)\s+)?:(([^!]+).+)?tmi\.twitch\.tv\s+([A-Z]+)\s+#?(\w+)(\s+:(.+))?$`).FindAllStringSubmatch(line, -1)
 
 	if matches == nil {
 		log.Println("vvvvvvvvvvvv")
@@ -317,6 +324,15 @@ func (t *Twitch) parseLine(line string) {
 		} else {
 			t.cEvents <- EventStopHosting{FromChannel: parsedLine.channel, Viewers: viewers}
 		}
+
+	// whisper has PRIVMSG like syntax - has to be parsed separately
+	case "WHISPER":
+		badges := t.parseBadges(parsedLine.tags["badges"])
+		parsedLine.user.IsPartner = badges["partner"] == 1
+		parsedLine.user.DisplayName = parsedLine.tags["display-name"]
+		parsedLine.user.Color = parsedLine.tags["color"]
+		parsedLine.message.Id = parsedLine.tags["message-id"]
+		t.cEvents <- EventWhisperReceived{User: parsedLine.user, Message: parsedLine.message}
 
 	default:
 		log.Println("unhandled event", line)

@@ -11,8 +11,10 @@ type (
 
 	EventConnected     struct{}
 	EventPinged        struct{}
-	EventJoinedChannel struct{}
-	EventPartedChannel struct{}
+	EventChannelJoined struct {
+		Channel *Channel
+	}
+	EventChannelParted struct{}
 
 	EventUserJoined struct {
 		Channel *Channel
@@ -22,11 +24,16 @@ type (
 		Channel *Channel
 		User    *User
 	}
+
 	EventMessageReceived struct {
 		Timestamp   time.Time
 		Channel     *Channel
 		ChannelUser ChannelUser
 		Message     Message
+	}
+	EventWhisperReceived struct {
+		User    *User
+		Message Message
 	}
 
 	EventUserstate struct {

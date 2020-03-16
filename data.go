@@ -12,7 +12,7 @@ type (
 	ChannelUser struct {
 		User             *User
 		SubscriberMonths int64
-		Badges           *Badges
+		Badges           Badges
 
 		IsMod         bool
 		IsBroadcaster bool
