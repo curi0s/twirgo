@@ -71,6 +71,7 @@ func (t *Twitch) callCallbacks(event interface{}) {
 	case EventMessageReceived:
 		for _, f := range t.callbacks.messageReceived {
 			go f(t, ev)
+			t.runCommand(ev)
 		}
 
 	case EventWhisperReceived:

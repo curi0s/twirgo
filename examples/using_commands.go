@@ -12,8 +12,19 @@ func handleMessage(t *twirgo.Twitch, event twirgo.EventMessageReceived) {
 	fmt.Println(event.Message.Content)
 }
 
-func handleUserJoin(t *twirgo.Twitch, event twirgo.EventUserJoined) {
-	t.SendMessage(event.Channel.Name, "Welcome "+event.User.Username)
+func cmdBar(t *twirgo.Twitch, c twirgo.Command) {
+	fmt.Println("command " + c.Command + " invoked")
+	fmt.Printf("%+v\n", c.Mentions)
+}
+
+func cmdFoo(t *twirgo.Twitch, c twirgo.Command) {
+	fmt.Println("command " + c.Command + " invoked")
+	fmt.Printf("%+v\n", c.Mentions)
+}
+
+func cmdAsd(t *twirgo.Twitch, c twirgo.Command) {
+	fmt.Println("command " + c.Command + " invoked")
+	fmt.Printf("%+v\n", c.Mentions)
 }
 
 func main() {
@@ -32,7 +43,10 @@ func main() {
 	}
 
 	t.OnMessageReceived(handleMessage)
-	t.OnUserJoined(handleUserJoin)
+
+	t.Command([]string{"!bar"}, []string{"curi0sde"}, twirgo.PermEveryone, cmdBar)
+	t.Command([]string{"$foo"}, []string{"curi0sde"}, twirgo.PermMods, cmdFoo)
+	t.Command([]string{"$asd"}, []string{"curi0sde"}, twirgo.PermBroadcaster, cmdAsd)
 
 	t.Run(ch)
 }

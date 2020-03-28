@@ -26,6 +26,8 @@ type Twitch struct {
 	cEvents chan interface{}
 
 	callbacks callbacks
+
+	commands map[string]*commandDefinition
 }
 
 var (
@@ -47,6 +49,7 @@ func NewTwirgo(options Options) *Twitch {
 		users:    make(map[string]*User),
 		cSend:    make(chan string),
 		cEvents:  make(chan interface{}),
+		commands: make(map[string]*commandDefinition),
 	}
 }
 
@@ -77,9 +80,9 @@ func (t *Twitch) Connect() (chan interface{}, error) {
 	return t.cEvents, nil
 }
 
-// Callbacks loops handles all callback functions
+// Run loops and handles all callback functions
 // Never use this method if you handle the channel (given from Connect()) yourself
-func (t *Twitch) Callbacks(chan interface{}) {
+func (t *Twitch) Run(chan interface{}) {
 	for event := range t.cEvents {
 		t.callCallbacks(event)
 	}
@@ -190,4 +193,13 @@ func (t *Twitch) getChannel(channel string) (*Channel, error) {
 // addUserToChannel links an internal global user to an internal global channel
 func (t *Twitch) addUserToChannel(user *User, channel *Channel) {
 	channel.Users[user.Username] = user
+}
+
+func (t *Twitch) inSlice(s []string, w string) bool {
+	for _, e := range s {
+		if strings.ToLower(e) == strings.ToLower(w) {
+			return true
+		}
+	}
+	return false
 }
