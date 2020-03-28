@@ -24,6 +24,8 @@ type Twitch struct {
 	conn    net.Conn
 	cSend   chan string
 	cEvents chan interface{}
+
+	callbacks callbacks
 }
 
 var (
@@ -73,6 +75,14 @@ func (t *Twitch) Connect() (chan interface{}, error) {
 	t.SendCommand("NICK " + t.opts.Username)
 
 	return t.cEvents, nil
+}
+
+// Callbacks loops handles all callback functions
+// Never use this method if you handle the channel (given from Connect()) yourself
+func (t *Twitch) Callbacks(chan interface{}) {
+	for event := range t.cEvents {
+		t.callCallbacks(event)
+	}
 }
 
 // receive reads the buffer of the connection and parses all events
