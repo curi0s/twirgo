@@ -1,7 +1,6 @@
 package twirgo
 
 import (
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -218,7 +217,7 @@ func (t *Twitch) parseLine(line string) {
 		t.cEvents <- EventChannelJoined{Channel: channel}
 
 	case strings.HasPrefix(line, ":tmi.twitch.tv NOTICE * :"):
-		log.Fatal(strings.Split(line, " :")[1])
+		t.log.Error(strings.Split(line, " :")[1])
 	}
 
 	// parse every other event of the irc protocol
@@ -229,11 +228,7 @@ func (t *Twitch) parseLine(line string) {
 
 	matches := regexp.MustCompile(`^(@(.+)\s+)?:(([^!]+).+)?tmi\.twitch\.tv\s+([A-Z]+)\s+#?(\w+)(\s+:(.+))?$`).FindAllStringSubmatch(line, -1)
 
-	if matches == nil {
-		log.Println("vvvvvvvvvvvv")
-		log.Println(line)
-		log.Println("^^^^^^^^^^^^")
-	} else {
+	if matches != nil {
 		parsedLine.channel, _ = t.getChannel(matches[0][6])
 		parsedLine.user, _ = t.getUser(matches[0][4])
 		parsedLine.t = matches[0][5]
@@ -287,7 +282,7 @@ func (t *Twitch) parseLine(line string) {
 		parsedLine.user, err = t.getUser(matches[0][8])
 		if err != nil {
 			// stop further processing, username is mandatory for this event
-			log.Println("Invalid username on CLEARCHAT event", err)
+			t.log.Error("Invalid username on CLEARCHAT event", err)
 			return
 		}
 		parsedLine.user.Id = t.toInt(parsedLine.tags["target-user-id"])
@@ -335,6 +330,6 @@ func (t *Twitch) parseLine(line string) {
 		t.cEvents <- EventWhisperReceived{User: parsedLine.user, Message: parsedLine.message}
 
 	default:
-		log.Println("unhandled event", line)
+		t.log.Info("unhandled event", line)
 	}
 }

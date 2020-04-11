@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/curi0s/twirgo"
+	"github.com/sirupsen/logrus"
 )
 
 func handleEvents(t *twirgo.Twitch, ch chan interface{}) error {
@@ -41,21 +41,24 @@ func handleEvents(t *twirgo.Twitch, ch chan interface{}) error {
 
 func main() {
 	options := twirgo.Options{
-		Username:       "curi0sde_bot",                       // the name of your bot account
-		Token:          os.Getenv("TOKEN"),                   // provide your token in any way you like
-		Channels:       []string{"curi0sde", "curi0sde_bot"}, // all channels will be joined at connect
-		DefaultChannel: "curi0sde",                           // have a look an #L16
+		Username:       "curi",                        // the name of your bot account
+		Token:          os.Getenv("TOKEN"),            // provide your token in any way you like
+		Channels:       []string{"curi", "curi_bot_"}, // all channels will be joined at connect
+		DefaultChannel: "curi",                        // have a look an #L16
+		Log:            logrus.New(),
 	}
 
-	t := twirgo.NewTwirgo(options)
+	// options.Log.SetLevel(logrus.DebugLevel)
+
+	t := twirgo.New(options)
 
 	ch, err := t.Connect()
 	if err == twirgo.ErrInvalidToken {
-		log.Fatal(err)
+		options.Log.Fatal(err)
 	}
 
 	err = handleEvents(t, ch)
 	if err != nil {
-		log.Fatal(err)
+		options.Log.Fatal(err)
 	}
 }

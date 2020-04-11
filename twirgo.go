@@ -2,9 +2,12 @@ package twirgo
 
 import (
 	"bufio"
+	"crypto/tls"
 	"errors"
 	"net"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Options are used to configure the bot.
@@ -13,6 +16,8 @@ type Options struct {
 	Token          string
 	Channels       []string
 	DefaultChannel string
+	Log            *logrus.Logger
+	Unsecure       bool
 }
 
 // Twitch is a Twitch IRC bot.
@@ -28,6 +33,8 @@ type Twitch struct {
 	callbacks callbacks
 
 	commands map[string]*commandDefinition
+
+	log *logrus.Logger
 }
 
 var (
@@ -36,8 +43,8 @@ var (
 	ErrInvalidToken    = errors.New("invalid token provided")
 )
 
-// NewTwirgo returns a new Twitch bot.
-func NewTwirgo(options Options) *Twitch {
+// New returns a new Twitch bot.
+func New(options Options) *Twitch {
 
 	// normalize options
 	options.Username = strings.ToLower(strings.TrimSpace(options.Username))
@@ -50,6 +57,7 @@ func NewTwirgo(options Options) *Twitch {
 		cSend:    make(chan string),
 		cEvents:  make(chan interface{}),
 		commands: make(map[string]*commandDefinition),
+		log:      options.Log,
 	}
 }
 
@@ -62,14 +70,22 @@ func (t *Twitch) Options() Options {
 // returning an event channel.
 func (t *Twitch) Connect() (chan interface{}, error) {
 	if strings.TrimSpace(t.opts.Token) == "" {
+		t.log.Fatal("Invalid token provided")
 		return nil, ErrInvalidToken
 	}
 
 	var err error
-	t.conn, err = net.Dial("tcp", "irc.chat.twitch.tv:6667")
+	if t.opts.Unsecure == true {
+		t.conn, err = net.Dial("tcp", "irc.chat.twitch.tv:6667")
+	} else {
+		t.conn, err = tls.Dial("tcp", "irc.chat.twitch.tv:6697", &tls.Config{})
+	}
 	if err != nil {
+		t.log.Fatal("Could not connect ", err)
 		return nil, err
 	}
+
+	t.log.Info("Connected to Twitch chat server")
 
 	go t.send()
 	go t.receive()
@@ -94,11 +110,14 @@ func (t *Twitch) receive() {
 	for {
 		line, err := buf.ReadString('\n')
 		if err != nil {
+			t.log.Fatal("Connection error", err)
 			t.cEvents <- EventConnectionError{Err: err}
 			return
 		}
 
 		line = strings.TrimSpace(line)
+
+		t.log.Debug("> " + line)
 
 		t.parseLine(line)
 	}
@@ -107,6 +126,7 @@ func (t *Twitch) receive() {
 // send writes the formatted message to the connection
 func (t *Twitch) send() {
 	for line := range t.cSend {
+		t.log.Debug("< " + line)
 		t.conn.Write([]byte(line + "\r\n"))
 	}
 }
