@@ -9,14 +9,14 @@ For either way there is a example in the [examples directory](examples/).
 
 You have to pass a `twirgo.Options` slice to the `New` method of TWIRGO.
 
-| Option         | Description                                              | Mandatory |
-| -------------- | -------------------------------------------------------- | --------- |
-| Username       | The username of your bot account                         | X         |
-| Token          | An oauth token (format: oauth:xxxx)                      | X         |
-| Channels       | A slice of channelnames to connect to at start           | X         |
-| Log            | A [logrus](https://github.com/sirupsen/logrus) instance  | X         |
-| DefaultChannel |                                                          |           |
-| Unsecure       | Should the connection unsecure to the Twitch IRC server? |           |
+| Option         | Description                                                                                            | Mandatory |
+| -------------- | ------------------------------------------------------------------------------------------------------ | --------- |
+| Username       | The username of your bot account                                                                       | X         |
+| Token          | An oauth token (format: oauth:xxxx)                                                                    | X         |
+| Channels       | A slice of channelnames to connect to at start                                                         | X         |
+| Log            | A [logrus](https://github.com/sirupsen/logrus) instance                                                | X         |
+| DefaultChannel | Not necessary for the library. Have a look at [examples/channel/main.go](examples/channel/main.go#L16) |           |
+| Unsecure       | Should the connection unsecure to the Twitch IRC server?                                               |           |
 
 ```golang
 options := twirgo.Options{
@@ -40,6 +40,6 @@ t := twirgo.New(options)
 
 Check out the [examples](examples/) directory.
 
-- [Channel](examples/channel/main.go)
-- [Callbacks](examples/callbacks/main.go)
-- [Commands](examples/commands/main.go)
+-   [Channel](examples/channel/main.go)
+-   [Callbacks](examples/callbacks/main.go)
+-   [Commands](examples/commands/main.go)
