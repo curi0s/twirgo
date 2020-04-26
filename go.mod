@@ -1,4 +1,4 @@
-module github.com/curi0s/twirgo
+module github.com/curiTTV/twirgo
 
 go 1.14
 
