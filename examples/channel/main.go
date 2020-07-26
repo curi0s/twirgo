@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/curi0s/twirgo"
+	"github.com/curiTTV/twirgo"
 	"github.com/sirupsen/logrus"
 )
 

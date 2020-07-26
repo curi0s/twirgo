@@ -30,7 +30,7 @@ options := twirgo.Options{
 
 // You can set the loglevel (default is Info) or even change the formatter
 // => https://github.com/sirupsen/logrus
-// Be aware that the debug level will reveal you token in the log!
+// Be aware that the debug level will reveal your token in the log!
 // options.Log.SetLevel(logrus.DebugLevel)
 
 t := twirgo.New(options)

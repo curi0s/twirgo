@@ -4,17 +4,18 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/curi0s/twirgo"
+	"github.com/curiTTV/twirgo"
 	"github.com/sirupsen/logrus"
 )
 
 func handleMessage(t *twirgo.Twitch, event twirgo.EventMessageReceived) {
 	fmt.Println(event.Message.Content)
+	fmt.Println(event.ChannelUser.Badges)
 }
 
-func handleUserJoin(t *twirgo.Twitch, event twirgo.EventUserJoined) {
-	t.SendMessage(event.Channel.Name, "Welcome "+event.User.Username)
-}
+// func handleUserJoin(t *twirgo.Twitch, event twirgo.EventUserJoined) {
+// 	t.SendMessage(event.Channel.Name, "Welcome "+event.User.Username)
+// }
 
 func main() {
 	options := twirgo.Options{
@@ -35,7 +36,7 @@ func main() {
 	}
 
 	t.OnMessageReceived(handleMessage)
-	t.OnUserJoined(handleUserJoin)
+	// t.OnUserJoined(handleUserJoin)
 
 	t.Run(ch)
 }
