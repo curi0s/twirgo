@@ -32,9 +32,12 @@ type (
 	}
 
 	Message struct {
-		Content  string
-		ID       string
-		EmoteIDs []string
+		Content string
+		ID      string
+		Emotes  map[string][]struct {
+			From int
+			To   int
+		}
 	}
 
 	SubTier interface{}

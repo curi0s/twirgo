@@ -246,10 +246,34 @@ func (t *Twitch) parseLine(line string) {
 			}
 
 			if emotes, ok := parsedLine.tags["emotes"]; ok && emotes != "" {
+				parsedLine.message.Emotes = make(map[string][]struct {
+					From int
+					To   int
+				})
 				for _, emote := range strings.Split(emotes, "/") {
 					if strings.Contains(emote, ":") {
 						emoteDetails := strings.Split(emote, ":")
-						parsedLine.message.EmoteIDs = append(parsedLine.message.EmoteIDs, emoteDetails[0])
+						for _, r := range strings.Split(emoteDetails[1], ",") {
+							fromTo := strings.Split(r, "-")
+
+							f, err := strconv.Atoi(fromTo[0])
+							if err != nil {
+								continue
+							}
+
+							t, err := strconv.Atoi(fromTo[1])
+							if err != nil {
+								continue
+							}
+
+							parsedLine.message.Emotes[emoteDetails[0]] = append(parsedLine.message.Emotes[emoteDetails[0]], struct {
+								From int
+								To   int
+							}{
+								From: f,
+								To:   t + 1,
+							})
+						}
 					}
 				}
 			}
