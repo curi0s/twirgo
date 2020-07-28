@@ -2,7 +2,7 @@ package twirgo
 
 type (
 	User struct {
-		Id          int64
+		ID          int64
 		Username    string
 		DisplayName string
 		Color       string
@@ -32,8 +32,9 @@ type (
 	}
 
 	Message struct {
-		Content string
-		Id      string
+		Content  string
+		ID       string
+		EmoteIDs []string
 	}
 
 	SubTier interface{}

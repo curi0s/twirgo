@@ -137,7 +137,7 @@ func (t *Twitch) parseUSERNOTICE(parsedLine *parsedLine) {
 	case "anonsubgift":
 		user, _ := t.getUser(parsedLine.tags["msg-param-recipient-user-name"])
 		user.DisplayName = parsedLine.tags["msg-param-recipient-display-name"]
-		user.Id = t.toInt(parsedLine.tags["msg-param-recipient-id"])
+		user.ID = t.toInt(parsedLine.tags["msg-param-recipient-id"])
 
 		t.cEvents <- Subgift{
 			Months:  t.toInt(parsedLine.tags["msg-param-cumulative-months"]),
@@ -244,6 +244,15 @@ func (t *Twitch) parseLine(line string) {
 			parsedLine.message = Message{
 				Content: matches[0][8],
 			}
+
+			if emotes, ok := parsedLine.tags["emotes"]; ok && emotes != "" {
+				for _, emote := range strings.Split(emotes, "/") {
+					if strings.Contains(emote, ":") {
+						emoteDetails := strings.Split(emote, ":")
+						parsedLine.message.EmoteIDs = append(parsedLine.message.EmoteIDs, emoteDetails[0])
+					}
+				}
+			}
 		}
 	}
 
@@ -253,7 +262,7 @@ func (t *Twitch) parseLine(line string) {
 
 	switch parsedLine.t {
 	case "PRIVMSG":
-		parsedLine.message.Id = parsedLine.tags["id"]
+		parsedLine.message.ID = parsedLine.tags["id"]
 		t.cEvents <- EventMessageReceived{Timestamp: timestamp, Channel: parsedLine.channel, Message: parsedLine.message, ChannelUser: t.buildChannelUser(&parsedLine)}
 
 	case "JOIN":
@@ -285,7 +294,7 @@ func (t *Twitch) parseLine(line string) {
 			t.log.Error("Invalid username on CLEARCHAT event", err)
 			return
 		}
-		parsedLine.user.Id = t.toInt(parsedLine.tags["target-user-id"])
+		parsedLine.user.ID = t.toInt(parsedLine.tags["target-user-id"])
 
 		t.cEvents <- EventClearchat{Timestamp: timestamp, BanDuration: t.toInt(parsedLine.tags["bad-duration"]), Channel: parsedLine.channel, User: parsedLine.user}
 
@@ -294,7 +303,7 @@ func (t *Twitch) parseLine(line string) {
 		if err != nil {
 			return
 		}
-		parsedLine.message.Id = parsedLine.tags["target-msg-id"]
+		parsedLine.message.ID = parsedLine.tags["target-msg-id"]
 
 		t.cEvents <- EventClearmsg{Timestamp: timestamp, User: parsedLine.user, Channel: parsedLine.channel, Message: parsedLine.message}
 
@@ -326,7 +335,7 @@ func (t *Twitch) parseLine(line string) {
 		parsedLine.user.IsPartner = badges["partner"] == 1
 		parsedLine.user.DisplayName = parsedLine.tags["display-name"]
 		parsedLine.user.Color = parsedLine.tags["color"]
-		parsedLine.message.Id = parsedLine.tags["message-id"]
+		parsedLine.message.ID = parsedLine.tags["message-id"]
 		t.cEvents <- EventWhisperReceived{User: parsedLine.user, Message: parsedLine.message}
 
 	default:
