@@ -37,8 +37,9 @@ type (
 	}
 
 	EventUserstate struct {
-		Channel *Channel
-		User    *User
+		Channel   *Channel
+		User      *User
+		EmoteSets []string
 	}
 	EventRoomstate struct {
 		Channel *Channel

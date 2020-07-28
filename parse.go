@@ -1,6 +1,7 @@
 package twirgo
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -194,6 +195,11 @@ func (t *Twitch) parseUSERNOTICE(parsedLine *parsedLine) {
 
 // parseLine parses every line that was received from the IRC server
 func (t *Twitch) parseLine(line string) {
+	if strings.Contains(line, "emote-set") {
+
+		fmt.Println(line)
+	}
+
 	switch {
 	case strings.HasPrefix(line, ":tmi.twitch.tv 001"):
 		t.SendCommand("CAP REQ :twitch.tv/membership")
@@ -272,7 +278,11 @@ func (t *Twitch) parseLine(line string) {
 		t.cEvents <- EventUserParted{Channel: parsedLine.channel, User: parsedLine.user}
 
 	case "USERSTATE":
-		t.cEvents <- EventUserstate{Channel: parsedLine.channel, User: parsedLine.user}
+		event := EventUserstate{Channel: parsedLine.channel, User: parsedLine.user}
+		if emoteSets, ok := parsedLine.tags["emote-sets"]; ok && emoteSets != "" {
+			event.EmoteSets = strings.Split(emoteSets, ",")
+		}
+		t.cEvents <- event
 
 	case "ROOMSTATE":
 		parsedLine.channel.EmoteOnly, _ = strconv.ParseBool(parsedLine.tags["emote-only"])
