@@ -60,11 +60,11 @@ func (t *Twitch) parseBadges(badgesString string) Badges {
 		if strings.Contains(badgesString, ",") {
 			for _, badge := range strings.Split(badgesString, ",") {
 				badgeInfo := strings.Split(badge, "/")
-				b[badgeInfo[0]] = t.toInt(badgeInfo[1])
+				b[badgeInfo[0]] = badgeInfo[1]
 			}
 		} else {
 			badgeInfo := strings.Split(badgesString, "/")
-			b[badgeInfo[0]] = t.toInt(badgeInfo[1])
+			b[badgeInfo[0]] = badgeInfo[1]
 		}
 	}
 
@@ -86,13 +86,13 @@ func (t *Twitch) buildChannelUser(parsedLine *parsedLine) ChannelUser {
 	}
 
 	channelUser.IsMod, _ = strconv.ParseBool(parsedLine.tags["mod"])
-	channelUser.IsBroadcaster = channelUser.Badges["broadcaster"] == 1
+	channelUser.IsBroadcaster = channelUser.Badges["broadcaster"] == "1"
 	// a broadcaster is also a mod
 	if channelUser.IsBroadcaster {
 		channelUser.IsMod = true
 	}
-	channelUser.IsVIP = channelUser.Badges["vip"] == 1
-	channelUser.User.IsPartner = channelUser.Badges["parner"] == 1
+	channelUser.IsVIP = channelUser.Badges["vip"] == "1"
+	channelUser.User.IsPartner = channelUser.Badges["parner"] == "1"
 	channelUser.User.DisplayName = parsedLine.tags["display-name"]
 	channelUser.User.Color = parsedLine.tags["color"]
 
@@ -360,7 +360,7 @@ func (t *Twitch) parseLine(line string) {
 	// whisper has PRIVMSG like syntax - has to be parsed separately
 	case "WHISPER":
 		badges := t.parseBadges(parsedLine.tags["badges"])
-		parsedLine.user.IsPartner = badges["partner"] == 1
+		parsedLine.user.IsPartner = badges["partner"] == "1"
 		parsedLine.user.DisplayName = parsedLine.tags["display-name"]
 		parsedLine.user.Color = parsedLine.tags["color"]
 		parsedLine.message.ID = parsedLine.tags["message-id"]

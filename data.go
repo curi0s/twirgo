@@ -100,7 +100,7 @@ type (
 		BadgeTier int64 // msg-param-threshold
 	}
 
-	Badges map[string]int64
+	Badges map[string]string
 
 	Tags map[string]string
 )
