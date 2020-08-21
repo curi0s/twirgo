@@ -1,7 +1,6 @@
 package twirgo
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -196,7 +195,6 @@ func (t *Twitch) parseUSERNOTICE(parsedLine *parsedLine) {
 
 // parseLine parses every line that was received from the IRC server
 func (t *Twitch) parseLine(line string) {
-	fmt.Println(line)
 	switch {
 	case strings.HasPrefix(line, ":tmi.twitch.tv 001"):
 		t.SendCommand("CAP REQ :twitch.tv/membership")
