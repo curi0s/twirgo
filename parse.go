@@ -1,10 +1,12 @@
 package twirgo
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type parsedLine struct {
@@ -194,6 +196,7 @@ func (t *Twitch) parseUSERNOTICE(parsedLine *parsedLine) {
 
 // parseLine parses every line that was received from the IRC server
 func (t *Twitch) parseLine(line string) {
+	fmt.Println(line)
 	switch {
 	case strings.HasPrefix(line, ":tmi.twitch.tv 001"):
 		t.SendCommand("CAP REQ :twitch.tv/membership")
@@ -243,6 +246,19 @@ func (t *Twitch) parseLine(line string) {
 
 			parsedLine.message = Message{
 				Content: matches[0][8],
+			}
+
+			parsedLine.message.Content = strings.TrimFunc(parsedLine.message.Content, func(r rune) bool {
+				return !unicode.IsGraphic(r)
+			})
+
+			if tag, ok := parsedLine.tags["msg-id"]; ok && tag == "highlighted-message" {
+				parsedLine.message.Highlighted = true
+			} else if _, ok := parsedLine.tags["client-nonce"]; !ok {
+				parsedLine.message.Me = true
+				if strings.HasPrefix(parsedLine.message.Content, "ACTION ") {
+					parsedLine.message.Content = parsedLine.message.Content[7:]
+				}
 			}
 
 			if emotes, ok := parsedLine.tags["emotes"]; ok && emotes != "" {

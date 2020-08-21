@@ -32,9 +32,11 @@ type (
 	}
 
 	Message struct {
-		Content string
-		ID      string
-		Emotes  map[string][]struct {
+		Content     string
+		ID          string
+		Me          bool
+		Highlighted bool
+		Emotes      map[string][]struct {
 			From int
 			To   int
 		}
