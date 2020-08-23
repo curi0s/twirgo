@@ -248,7 +248,7 @@ func (t *Twitch) parseLine(line string) {
 
 			if tag, ok := parsedLine.tags["msg-id"]; ok && tag == "highlighted-message" {
 				parsedLine.message.Highlighted = true
-			} else if len(parsedLine.message.Content) > 0 && []byte(parsedLine.message.Content)[0] == byte(1) {
+			} else if len(parsedLine.message.Content) > 0 && parsedLine.message.Content[0] == byte(1) {
 				parsedLine.message.Content = strings.TrimFunc(parsedLine.message.Content, func(r rune) bool {
 					return !unicode.IsGraphic(r)
 				})
