@@ -246,15 +246,15 @@ func (t *Twitch) parseLine(line string) {
 				Content: matches[0][8],
 			}
 
-			parsedLine.message.Content = strings.TrimFunc(parsedLine.message.Content, func(r rune) bool {
-				return !unicode.IsGraphic(r)
-			})
-
 			if tag, ok := parsedLine.tags["msg-id"]; ok && tag == "highlighted-message" {
 				parsedLine.message.Highlighted = true
-			} else if _, ok := parsedLine.tags["client-nonce"]; !ok {
-				parsedLine.message.Me = true
+			} else if len(parsedLine.message.Content) > 0 && []byte(parsedLine.message.Content)[0] == byte(1) {
+				parsedLine.message.Content = strings.TrimFunc(parsedLine.message.Content, func(r rune) bool {
+					return !unicode.IsGraphic(r)
+				})
+
 				if strings.HasPrefix(parsedLine.message.Content, "ACTION ") {
+					parsedLine.message.Me = true
 					parsedLine.message.Content = parsedLine.message.Content[7:]
 				}
 			}
